@@ -1,0 +1,159 @@
+# Unicorn Pomodoro — a garmodoro-style Pomodoro timer for Pimoroni Unicorn
+# boards. Board selection and all tunables live in config.py.
+#
+# Buttons:
+#   A        start a session (Ready state) / back to Pomodoro (clock mode)
+#   B        reset: press once for "Reset?", again to confirm
+#   D        clock mode (stops and resets any running Pomodoro)
+#   LUX +/-  brightness, VOL +/- volume
+
+import gc
+import time
+
+from picographics import PicoGraphics
+
+import board
+import config
+import effects
+import net_time
+from pomodoro import READY, WORK, WORK_DONE, Pomodoro
+from sound import Sound
+from ui import UI
+
+MODE_POMODORO = "pomodoro"
+MODE_CLOCK = "clock"
+
+
+class Button:
+    def __init__(self, su, switch):
+        self._su = su
+        self._switch = switch
+        self._down = False
+
+    def pressed(self):
+        down = self._su.is_pressed(self._switch)
+        fired = down and not self._down
+        self._down = down
+        return fired
+
+
+su = board.Unicorn()
+graphics = PicoGraphics(display=board.DISPLAY)
+with open("3x5.bitmapfont", "rb") as f:
+    graphics.set_font(f.read())
+su.set_brightness(config.DEFAULT_BRIGHTNESS)
+
+ui = UI(graphics, board.WIDTH, board.HEIGHT, board.BUTTON_A_ZONE)
+sound = Sound(su, board.Channel)
+fx_burst = effects.Burst(
+    graphics, board.WIDTH, board.HEIGHT, config.TOMATO_RED, config.STEM_GREEN
+)
+fx_ready = effects.Rings(graphics, board.WIDTH, board.HEIGHT, config.COLOR_READY)
+pomo = Pomodoro(
+    config.WORK_S, config.SHORT_BREAK_S, config.LONG_BREAK_S, config.SESSIONS_PER_CYCLE
+)
+
+ui.render_boot()
+su.update(graphics)
+net_time.sync()
+last_ntp_sync = time.ticks_ms()
+
+btn_a = Button(su, board.Unicorn.SWITCH_A)
+btn_b = Button(su, board.Unicorn.SWITCH_B)
+btn_c = Button(su, board.Unicorn.SWITCH_C)
+btn_d = Button(su, board.Unicorn.SWITCH_D)
+
+mode = MODE_POMODORO
+reset_prompt_until = None
+effect = None
+last_ticked_second = None
+
+gc.collect()
+last_gc = time.ticks_ms()
+
+while True:
+    now = time.ticks_ms()
+    if time.ticks_diff(now, last_gc) >= 1000:
+        gc.collect()
+        last_gc = now
+    a, b, c, d = btn_a.pressed(), btn_b.pressed(), btn_c.pressed(), btn_d.pressed()
+
+    if reset_prompt_until is not None:
+        if b:
+            pomo.reset()
+            effect = None
+            reset_prompt_until = None
+        elif a or c or d or time.ticks_diff(reset_prompt_until, now) <= 0:
+            reset_prompt_until = None
+    elif mode == MODE_CLOCK:
+        if a:
+            mode = MODE_POMODORO
+    else:
+        if a and pomo.state == READY:
+            pomo.start(now)
+        if b:
+            reset_prompt_until = time.ticks_add(
+                now, config.RESET_CONFIRM_TIMEOUT_S * 1000
+            )
+        if d:
+            pomo.reset()
+            effect = None
+            mode = MODE_CLOCK
+
+    if su.is_pressed(board.Unicorn.SWITCH_BRIGHTNESS_UP):
+        su.adjust_brightness(0.01)
+    if su.is_pressed(board.Unicorn.SWITCH_BRIGHTNESS_DOWN):
+        su.adjust_brightness(-0.01)
+    if su.is_pressed(board.Unicorn.SWITCH_VOLUME_UP):
+        su.adjust_volume(0.01)
+    if su.is_pressed(board.Unicorn.SWITCH_VOLUME_DOWN):
+        su.adjust_volume(-0.01)
+
+    event = pomo.poll(now)
+    if event is not None:
+        melody = (
+            config.WORK_DONE_MELODY if event == WORK_DONE else config.BREAK_DONE_MELODY
+        )
+        sound.play(melody, now)
+        effect = fx_burst if event == WORK_DONE else fx_ready
+        effect.start(now)
+        if event == WORK_DONE:
+            # The break should start when the burst animation ends, not under it.
+            pomo.postpone(int(fx_burst.DURATION_S * 1000))
+
+    secs = pomo.remaining_seconds(now)
+    if pomo.state == WORK and secs != last_ticked_second:
+        last_ticked_second = secs
+        sound.tick(now)
+    sound.update(now)
+
+    if (
+        net_time.synced
+        and (mode == MODE_CLOCK or pomo.state == READY)
+        and time.ticks_diff(now, last_ntp_sync) > config.NTP_RESYNC_HOURS * 3600 * 1000
+    ):
+        net_time.resync()
+        last_ntp_sync = now
+
+    if effect is not None and effect.done(now):
+        effect = None
+
+    if reset_prompt_until is not None:
+        ui.render_reset_confirm(now)
+    elif effect is not None:
+        effect.draw(now)
+    elif mode == MODE_CLOCK:
+        ui.render_clock(net_time.local_hms())
+    else:
+        ui.render_pomodoro(
+            now,
+            pomo.state,
+            secs,
+            pomo.remaining_fraction(now),
+            pomo.completed,
+            net_time.local_hms(),
+        )
+    su.update(graphics)
+    if effect is None:
+        # Effects run unthrottled for the smoothest possible motion.
+        time.sleep_ms(1000 // config.FPS)

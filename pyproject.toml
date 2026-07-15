@@ -1,0 +1,22 @@
+[tool.ruff]
+# Conservative target so autofixes never introduce syntax newer than what
+# the MicroPython firmware on the Pico W supports.
+target-version = "py38"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade (f-strings etc. are fine: MicroPython >= 1.19)
+    "SIM", # flake8-simplify
+    "ARG", # unused arguments
+    "RUF", # ruff-specific rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test mocks implement the full graphics interface; unused args are by design.
+"tests/*" = ["ARG"]
