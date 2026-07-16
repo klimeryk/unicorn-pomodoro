@@ -10,7 +10,7 @@ LONG_BREAK_MINUTES = 25
 SESSIONS_PER_CYCLE = 4
 
 # Shrink every phase to seconds so a full cycle can be watched end-to-end.
-TEST_MODE = False
+TEST_MODE = True
 
 if TEST_MODE:
     WORK_S = 15
@@ -54,6 +54,17 @@ AUTO_DST_EU = False  # EU rule: last Sunday of March -> last Sunday of October
 WIFI_TIMEOUT_S = 10
 NTP_RESYNC_HOURS = 6
 CLOCK_24H = True
+
+# Clock mode: colored digits on black, recolored each hour by a full-screen
+# flash that settles on the new color and then inverts back into the digits;
+# False = plain white-on-black.
+CLOCK_HOURLY_FLASH = True
+CLOCK_BG_VALUE = 0.6  # HSV value of the flash background colors
+CLOCK_DIGIT_VALUE = 1.0  # HSV value of the settled digit color
+CLOCK_MINUTE_BRIGHTNESS = 0.5  # minutes vs hours; hours read as the bold line
+CLOCK_FLASH_S = 1.2  # random-color flash at the top of the hour
+CLOCK_SETTLE_S = 2.0  # smooth fade into the new hour's color
+CLOCK_INVERT_S = 1.0  # background fades out while the digits take the color
 
 DEFAULT_BRIGHTNESS = 0.5
 FPS = 100

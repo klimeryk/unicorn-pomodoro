@@ -6,7 +6,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from effects import Burst, Rings
+import config
+from effects import Burst, HourFlash, Rings
 
 W = H = 16
 
@@ -60,7 +61,40 @@ def test_rings():
     run_effect(lambda g: Rings(g, W, H, (0, 255, 0)))
 
 
+def test_hour_flash():
+    config.TEST_MODE = False
+    fx = HourFlash()
+    fg0, bg0 = fx.update(0, (9, 59, 58))
+    assert bg0 is None
+    assert fx.update(100, (9, 59, 59)) == (fg0, None)
+    assert fx.update(200, None) == (fg0, None)
+    assert max(fg0) > 0, fg0
+
+    total_ms = int(
+        (config.CLOCK_FLASH_S + config.CLOCK_SETTLE_S + config.CLOCK_INVERT_S) * 1000
+    )
+    seen = set()
+    now = 300
+    end = now + total_ms
+    while now < end:
+        fg, bg = fx.update(now, (10, 0, 0))
+        assert bg is not None
+        for c in (fg, bg):
+            for ch in c:
+                assert isinstance(ch, int) and 0 <= ch <= 255, c
+        seen.add((fg, bg))
+        now += 20
+    assert len(seen) > 10, len(seen)
+
+    settled = fx.update(end + 100, (10, 0, 1))
+    assert settled == fx.update(end + 200, (10, 30, 0))
+    assert settled[1] is None
+    assert settled[0] != fg0
+    print(f"HourFlash: {len(seen)} states during transition: OK")
+
+
 if __name__ == "__main__":
     test_burst()
     test_rings()
+    test_hour_flash()
     print("all effects tests passed")

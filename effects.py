@@ -1,15 +1,8 @@
-# Full-screen transition animations: a ripe tomato bursts when a work
-# session ends, green rings converge when a break ends. Runs on host
-# CPython too (see tests/test_effects.py). Smoothness comes from
-# per-pixel create_pen with continuous float values (pens are packed ints
-# on these boards, so this is cheap and needs no cache), analytic
-# time-based motion, and gamma correction (v*v) so low-brightness fades
-# don't band on LEDs.
-
 import math
 import random
 from array import array
 
+import config
 from pomodoro import ticks_diff
 
 try:
@@ -23,8 +16,43 @@ except ImportError:
 
 
 _PARTICLES = 24
-_GRAVITY = 10.0  # px/s^2
-_ASPECT = 1.3  # the tomato is wider than tall
+_GRAVITY = 10.0
+_ASPECT = 1.3
+
+
+def _hsv(h, s, v):
+    h = (h % 1.0) * 6.0
+    i = int(h)
+    f = h - i
+    p = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    if i == 0:
+        r, g, b = v, t, p
+    elif i == 1:
+        r, g, b = q, v, p
+    elif i == 2:
+        r, g, b = p, v, t
+    elif i == 3:
+        r, g, b = p, q, v
+    elif i == 4:
+        r, g, b = t, v, q
+    else:
+        r, g, b = v, p, q
+    return int(r * 255), int(g * 255), int(b * 255)
+
+
+def _smooth(u):
+    return u * u * (3.0 - 2.0 * u)
+
+
+def _blend(c1, c2, u):
+    w = 1.0 - u
+    return (
+        int(math.sqrt(c1[0] * c1[0] * w + c2[0] * c2[0] * u)),
+        int(math.sqrt(c1[1] * c1[1] * w + c2[1] * c2[1] * u)),
+        int(math.sqrt(c1[2] * c1[2] * w + c2[2] * c2[2] * u)),
+    )
 
 
 def _ease_out_back(t):
@@ -62,7 +90,6 @@ class _Effect:
 
     @micropython.native
     def _px(self, x, y, cr, cg, cb, v):
-        # v is already linear (gamma applied by the caller).
         if v > 1.0:
             v = 1.0
         self.g.set_pen(self.g.create_pen(int(cr * v), int(cg * v), int(cb * v)))
@@ -70,8 +97,6 @@ class _Effect:
 
 
 class _Field(_Effect):
-    # Anti-aliased disc/ring drawing over a precomputed distance field.
-    # aspect > 1 makes y distances count more, i.e. shapes wider than tall.
     def __init__(self, graphics, width, height, aspect):
         super().__init__(graphics, width, height)
         self.cx = (width - 1) / 2
@@ -144,7 +169,6 @@ class _Tomato(_Field):
 
     @micropython.native
     def _splat(self, fx, fy, color, brightness):
-        # Bilinear 2x2 write so sub-pixel positions read as smooth motion.
         cr, cg, cb = color
         x = math.floor(fx)
         y = math.floor(fy)
@@ -187,7 +211,6 @@ class Burst(_Tomato):
             self._disc(r, self.body, 1.0)
             self._draw_stem(r, 1.0)
         elif t < self.POP_S:
-            # Charge up: blend the body toward white just before the pop.
             u = (t - self.GROW_S) / (self.POP_S - self.GROW_S)
             cr, cg, cb = self.body
             color = (
@@ -202,7 +225,6 @@ class Burst(_Tomato):
             if u < 0.08:
                 self._disc(self.r * (1.0 - u / 0.08), (255, 255, 255), 1.0)
             if u < 0.5:
-                # Ring fades to zero right as it expands past the corners.
                 self._ring(self.r + u * self.w * 1.5, self.body, 1.0 - u * 2.0)
             dt = t - self.POP_S
             fall = 0.5 * _GRAVITY * dt * dt
@@ -218,9 +240,6 @@ class Burst(_Tomato):
 
 
 class Rings(_Field):
-    # Staggered rings accelerate inward from beyond the edges and collapse
-    # into a bright center pulse: focus gathering right where the Ready
-    # label is about to appear.
     COUNT = 3
     STAGGER_S = 0.24
     SWEEP_S = 0.65
@@ -254,3 +273,67 @@ class Rings(_Field):
                 cb + (255 - cb) * wh,
             )
             self._disc(2.5 + u * 1.5, color, 1.0 - u)
+
+
+class HourFlash:
+    _FLASH_COLORS = 3
+    _MIN_HUE_DIST = 0.15
+    _BLACK = (0, 0, 0)
+
+    def __init__(self):
+        self._hue = random.random()
+        self._fg = _hsv(self._hue, 1.0, config.CLOCK_DIGIT_VALUE)
+        self._prev_fg = self._fg
+        self._last_key = None
+        self._start = None
+        self._seq = None
+        self._target = None
+
+    def _trigger(self, now):
+        v = config.CLOCK_BG_VALUE
+        while True:
+            hue = random.random()
+            d = abs(hue - self._hue)
+            if min(d, 1.0 - d) >= self._MIN_HUE_DIST:
+                break
+        self._hue = hue
+        self._target = _hsv(hue, 1.0, v)
+        self._prev_fg = self._fg
+        self._fg = _hsv(hue, 1.0, config.CLOCK_DIGIT_VALUE)
+        self._seq = [self._BLACK] + [
+            _hsv(random.random(), 1.0, v) for _ in range(self._FLASH_COLORS)
+        ]
+        self._start = now
+
+    def update(self, now, hms):
+        if hms is not None:
+            key = hms[1] if config.TEST_MODE else hms[0]
+            if self._last_key is None:
+                self._last_key = key
+            elif key != self._last_key:
+                self._last_key = key
+                self._trigger(now)
+        if self._start is None:
+            return self._fg, None
+        t = ticks_diff(now, self._start) / 1000
+        flash_s = config.CLOCK_FLASH_S
+        if t < flash_s:
+            pos = t / flash_s * (len(self._seq) - 1)
+            i = int(pos)
+            bg = _blend(self._seq[i], self._seq[i + 1], _smooth(pos - i))
+            fg = self._BLACK if i else _blend(self._prev_fg, self._BLACK, _smooth(pos))
+            return fg, bg
+        t -= flash_s
+        if t < config.CLOCK_SETTLE_S:
+            u = _smooth(t / config.CLOCK_SETTLE_S)
+            return self._BLACK, _blend(self._seq[-1], self._target, u)
+        t -= config.CLOCK_SETTLE_S
+        if t < config.CLOCK_INVERT_S:
+            u = _smooth(t / config.CLOCK_INVERT_S)
+            return (
+                _blend(self._BLACK, self._fg, u),
+                _blend(self._target, self._BLACK, u),
+            )
+        self._start = None
+        self._seq = None
+        return self._fg, None

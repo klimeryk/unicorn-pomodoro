@@ -40,15 +40,28 @@ class Button:
 su = board.Unicorn()
 graphics = PicoGraphics(display=board.DISPLAY)
 with open("3x5.bitmapfont", "rb") as f:
-    graphics.set_font(f.read())
+    font = f.read()
+with open("MatrixChunky8x6.bitmapfont", "rb") as f:
+    clock_hour_font = f.read()
+with open("MatrixLight8x6.bitmapfont", "rb") as f:
+    clock_minute_font = f.read()
 su.set_brightness(config.DEFAULT_BRIGHTNESS)
 
-ui = UI(graphics, board.WIDTH, board.HEIGHT, board.BUTTON_A_ZONE)
+ui = UI(
+    graphics,
+    board.WIDTH,
+    board.HEIGHT,
+    board.BUTTON_A_ZONE,
+    font,
+    clock_hour_font,
+    clock_minute_font,
+)
 sound = Sound(su, board.Channel)
 fx_burst = effects.Burst(
     graphics, board.WIDTH, board.HEIGHT, config.TOMATO_RED, config.STEM_GREEN
 )
 fx_ready = effects.Rings(graphics, board.WIDTH, board.HEIGHT, config.COLOR_READY)
+hour_flash = effects.HourFlash() if config.CLOCK_HOURLY_FLASH else None
 pomo = Pomodoro(
     config.WORK_S, config.SHORT_BREAK_S, config.LONG_BREAK_S, config.SESSIONS_PER_CYCLE
 )
@@ -118,7 +131,6 @@ while True:
         effect = fx_burst if event == WORK_DONE else fx_ready
         effect.start(now)
         if event == WORK_DONE:
-            # The break should start when the burst animation ends, not under it.
             pomo.postpone(int(fx_burst.DURATION_S * 1000))
 
     secs = pomo.remaining_seconds(now)
@@ -138,12 +150,18 @@ while True:
     if effect is not None and effect.done(now):
         effect = None
 
+    hms = net_time.local_hms()
+    if hour_flash is not None:
+        clock_fg, clock_bg = hour_flash.update(now, hms)
+    else:
+        clock_fg = clock_bg = None
+
     if reset_prompt_until is not None:
         ui.render_reset_confirm(now)
     elif effect is not None:
         effect.draw(now)
     elif mode == MODE_CLOCK:
-        ui.render_clock(net_time.local_hms())
+        ui.render_clock(hms, clock_fg, clock_bg)
     else:
         ui.render_pomodoro(
             now,
@@ -151,9 +169,8 @@ while True:
             secs,
             pomo.remaining_fraction(now),
             pomo.completed,
-            net_time.local_hms(),
+            hms,
         )
     su.update(graphics)
     if effect is None:
-        # Effects run unthrottled for the smoothest possible motion.
         time.sleep_ms(1000 // config.FPS)

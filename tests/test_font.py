@@ -5,11 +5,13 @@
 
 import os
 
-FONT = os.path.join(os.path.dirname(__file__), "..", "3x5.bitmapfont")
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+FONT = os.path.join(ROOT, "3x5.bitmapfont")
 
 UI_STRINGS = ("Ready", "Reset?", "RST?", "net", "0123456789")
 
-# Stellar geometry: 16px wide, 1 border ring each side (config.LAYOUT).
+CLOCK_FONTS = ("MatrixChunky8x6.bitmapfont", "MatrixLight8x6.bitmapfont")
+
 STELLAR_LABEL_AVAIL = 16 - 2 * 1
 
 
@@ -17,15 +19,12 @@ def load_widths():
     with open(FONT, "rb") as f:
         data = f.read()
     height, max_width = data[0], data[1]
-    # 3x5 glyphs plus Tom Thumb's descender row; ui.py's GLYPH_H stays 5
-    # because layout centers on the cap height.
     assert height == 6, height
     assert max_width == 3, max_width
     return data[2 : 2 + 105]
 
 
 def measure(widths, text):
-    # Mirrors bitmap::measure_text at scale 1: glyph width + 1px spacing each.
     return sum(widths[ord(ch) - 32] + 1 for ch in text)
 
 
@@ -44,7 +43,21 @@ def test_ready_scrolls_on_stellar():
     print("'Ready' wider than label area (scrolls): OK")
 
 
+def test_clock_fonts_present():
+    for name in CLOCK_FONTS:
+        with open(os.path.join(ROOT, name), "rb") as f:
+            data = f.read()
+        height, max_width = data[0], data[1]
+        assert height == 8, (name, height)
+        assert max_width == 6, (name, max_width)
+        widths = data[2 : 2 + 105]
+        for ch in "0123456789-":
+            assert widths[ord(ch) - 32] > 0, f"{name}: no glyph for {ch!r}"
+    print("clock fonts (Matrix 8x6) present: OK")
+
+
 if __name__ == "__main__":
     test_ui_glyphs_present()
     test_ready_scrolls_on_stellar()
+    test_clock_fonts_present()
     print("all font tests passed")

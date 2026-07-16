@@ -21,6 +21,9 @@ class MockGraphics:
     def set_pen(self, pen):
         pass
 
+    def set_font(self, font):
+        pass
+
     def clear(self):
         pass
 
@@ -55,6 +58,18 @@ def test_pen_cache_bounded():
     print(f"pen cache bounded ({len(ui._pens)} pens): OK")
 
 
+def test_clock_pen_cache():
+    g = MockGraphics()
+    ui = UI(g, 16, 16, ((15, 3), (15, 4)))
+    for i in range(5000):
+        fg = ((i * 3) % 256, (i * 5) % 256, (i * 11) % 256)
+        bg = (i % 256, (i * 7) % 256, (i * 13) % 256) if i % 2 else None
+        ui.render_clock((12, 34, i % 60), fg, bg)
+    assert len(ui._pens) < 10, len(ui._pens)
+    print(f"clock fg/bg keep pen cache bounded ({len(ui._pens)} pens): OK")
+
+
 if __name__ == "__main__":
     test_pen_cache_bounded()
+    test_clock_pen_cache()
     print("all ui pen tests passed")

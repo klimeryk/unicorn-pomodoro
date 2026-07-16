@@ -5,6 +5,8 @@ from pomodoro import LONG_BREAK, READY, SHORT_BREAK, WORK
 
 GLYPH_H = 5
 DIGIT_PITCH = 4
+BIG_GLYPH_H = 7
+BIG_DIGIT_PITCH = 6
 _PULSE_LEVELS = 32
 _BAR_LEVELS = 16
 
@@ -17,7 +19,16 @@ STATE_COLORS = {
 
 
 class UI:
-    def __init__(self, graphics, width, height, a_zone):
+    def __init__(
+        self,
+        graphics,
+        width,
+        height,
+        a_zone,
+        font=None,
+        clock_hour_font=None,
+        clock_minute_font=None,
+    ):
         self.g = graphics
         self.w = width
         self.h = height
@@ -26,6 +37,11 @@ class UI:
         self.scale = config.LAYOUT["scale"]
         self._pens = {}
         self._black = self._pen((0, 0, 0))
+        self._font = font
+        self._hour_font = clock_hour_font
+        self._minute_font = clock_minute_font
+        self._font_active = None
+        self._set_font(font)
 
         if config.LAYOUT["horizontal"]:
             self.x_main = width * 3 // 10
@@ -44,10 +60,13 @@ class UI:
             self.x_dots = width // 2
             self.y_dots = (self.y_main + GLYPH_H * self.scale + self.y_bar) // 2
 
-    # --- primitives -----------------------------------------------------
-
     def _y_center(self, scale):
         return (self.h - GLYPH_H * scale) // 2
+
+    def _set_font(self, font):
+        if font is not self._font_active:
+            self.g.set_font(font)
+            self._font_active = font
 
     def _pen(self, color, brightness=1.0):
         key = (
@@ -82,7 +101,15 @@ class UI:
         return round(b * _PULSE_LEVELS) / _PULSE_LEVELS
 
     def _draw_time(
-        self, left, right, x_center, y, color, colon_on, scale, colon_brightness=1.0
+        self,
+        left,
+        right,
+        x_center,
+        y,
+        color,
+        colon_on,
+        scale,
+        colon_brightness=1.0,
     ):
         s = scale
         total = DIGIT_PITCH * s * (len(left) + len(right)) - s
@@ -150,12 +177,14 @@ class UI:
         return f"{h:02d}", f"{hms[1]:02d}"
 
     def render_boot(self):
+        self._set_font(self._font)
         self._clear()
         self._draw_label(
             ".....", self.w // 2, self._y_center(1), config.COLOR_CLOCK, 1, 0
         )
 
     def render_pomodoro(self, now, state, secs, frac, completed, hms):
+        self._set_font(self._font)
         self._clear()
         color = STATE_COLORS[state]
         if state == READY:
@@ -188,6 +217,7 @@ class UI:
             )
 
     def render_reset_confirm(self, now):
+        self._set_font(self._font)
         self._clear()
         self._border(config.COLOR_RESET)
         label = "Reset?"
@@ -196,22 +226,51 @@ class UI:
         y = self._y_center(self.scale)
         self._draw_label(label, self.w // 2, y, config.COLOR_RESET, self.scale, now)
 
-    def render_clock(self, hms):
-        self._clear()
+    def _draw_big(self, text, x, y, pen, font):
+        self._set_font(font)
+        self.g.set_pen(pen)
+        for ch in text:
+            self.g.text(ch, x, y, -1, self.scale)
+            x += BIG_DIGIT_PITCH * self.scale
+        return x
+
+    def render_clock(self, hms, fg=None, bg=None):
+        if fg is None:
+            fg = config.COLOR_CLOCK_BIG
+        if bg is None:
+            self._clear()
+        else:
+            self.g.set_pen(self.g.create_pen(bg[0], bg[1], bg[2]))
+            self.g.clear()
         if hms:
             left, right = self._hhmm(hms)
-            colon_on = hms[2] % 2 == 0
         else:
             left = right = "--"
-            colon_on = True
-        y = self._y_center(self.scale)
-        self._draw_time(
-            left,
-            right,
-            self.w // 2,
-            y,
-            config.COLOR_CLOCK_BIG,
-            colon_on,
-            self.scale,
-            config.CLOCK_COLON_BRIGHTNESS,
+        dim = config.CLOCK_MINUTE_BRIGHTNESS
+        hour_pen = self.g.create_pen(fg[0], fg[1], fg[2])
+        minute_pen = self.g.create_pen(
+            int(fg[0] * dim), int(fg[1] * dim), int(fg[2] * dim)
         )
+        s = self.scale
+        if config.LAYOUT["horizontal"]:
+            total = BIG_DIGIT_PITCH * s * 4 - s
+            x = (self.w - total) // 2
+            y = (self.h - BIG_GLYPH_H * s) // 2
+            x = self._draw_big(left, x, y, hour_pen, self._hour_font)
+            self._draw_big(right, x, y, minute_pen, self._minute_font)
+            if hms is None or hms[2] % 2 == 0:
+                cb = config.CLOCK_COLON_BRIGHTNESS
+                self.g.set_pen(
+                    self.g.create_pen(int(fg[0] * cb), int(fg[1] * cb), int(fg[2] * cb))
+                )
+                self.g.rectangle(x - s, y + 2 * s, s, s)
+                self.g.rectangle(x - s, y + 4 * s, s, s)
+        else:
+            self._draw_big(left, s, 0, hour_pen, self._hour_font)
+            self._draw_big(
+                right,
+                self.w - (2 * BIG_DIGIT_PITCH) * s,
+                self.h - BIG_GLYPH_H * s,
+                minute_pen,
+                self._minute_font,
+            )

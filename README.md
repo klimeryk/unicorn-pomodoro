@@ -22,7 +22,11 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
 - **B** asks `Reset?` — press **B** again to reset to the first session,
   any other button (or 5 s) cancels.
 - **D** switches to a clock-only mode and resets the Pomodoro; **A** goes
-  back.
+  back. Big hours sit top-left, dimmer minutes bottom-right, colored on a
+  black background. At the top of every hour the background flashes through
+  random colors, settles on a new one, then fades back to black leaving the
+  digits in the new color (set `CLOCK_HOURLY_FLASH = False` in `config.py`
+  for a plain white-on-black clock).
 - **LUX +/-** adjusts brightness, **VOL +/-** adjusts the sound volume.
 
 ## Setup
@@ -48,7 +52,7 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
    `pip install mpremote`; Thonny works too):
 
    ```sh
-   mpremote cp main.py config.py board.py pomodoro.py ui.py sound.py net_time.py secrets.py 3x5.bitmapfont :
+   mpremote cp main.py config.py board.py pomodoro.py ui.py effects.py sound.py net_time.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont :
    mpremote reset
    ```
 
@@ -84,13 +88,17 @@ ruff check .    # lint (add --fix to auto-fix)
 ruff format .   # format
 ```
 
-The display font is [Tom Thumb](https://opengameart.org/content/tom-thumb-tiny-ascii-font-3x5)
+The main display font is [Tom Thumb](https://opengameart.org/content/tom-thumb-tiny-ascii-font-3x5)
 by Brian Swetland and Robey Pointer (CC0/CC-BY 3.0), checked in as the
-`tom-thumb-new.png` sprite sheet. `3x5.bitmapfont` is generated from it with
+`tom-thumb-new.png` sprite sheet. Clock mode uses trip5's
+[Matrix-Fonts](https://github.com/trip5/Matrix-Fonts) (CC-BY): the bold
+`MatrixChunky8x6` for the hours and the thin `MatrixLight8x6` for the minutes.
+The `.bitmapfont` files are generated with
 [pgfutil](https://github.com/Gadgetoid/pgfutil):
 
 ```sh
 pip install pgfutil pillow
-python3 tools/build_font.py
-python3 tests/test_font.py   # sanity-check the result
+python3 tools/build_font.py           # 3x5.bitmapfont
+python3 tools/build_matrix_fonts.py   # MatrixChunky8x6 + MatrixLight8x6 (auto-fetches the BDFs)
+python3 tests/test_font.py            # sanity-check the results
 ```
