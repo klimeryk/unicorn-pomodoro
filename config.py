@@ -10,7 +10,7 @@ LONG_BREAK_MINUTES = 25
 SESSIONS_PER_CYCLE = 4
 
 # Shrink every phase to seconds so a full cycle can be watched end-to-end.
-TEST_MODE = True
+TEST_MODE = False
 
 if TEST_MODE:
     WORK_S = 15
@@ -38,7 +38,7 @@ CLOCK_COLON_BRIGHTNESS = 0.45
 TOMATO_RED = (255, 60, 40)
 STEM_GREEN = (30, 150, 40)
 
-TICK_ENABLED = True  # quiet tick every second during a work session
+TICK_ENABLED = False  # quiet tick every second during a work session
 BEEP_ENABLED = True  # beeps when a session/break ends
 DEFAULT_VOLUME = 0.5  # 0.0-1.0, also adjustable with the volume buttons
 
