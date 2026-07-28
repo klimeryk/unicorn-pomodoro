@@ -52,6 +52,9 @@ BREAK_DONE_MELODY = ((784, 120), (988, 120), (1175, 250))  # ascending: back at 
 UTC_OFFSET_HOURS = 0  # CET; DST on top of this if AUTO_DST_EU
 AUTO_DST_EU = False  # EU rule: last Sunday of March -> last Sunday of October
 WIFI_TIMEOUT_S = 10
+WIFI_CONNECT_ATTEMPTS = 3  # full connect retries per sync() call
+WIFI_RETRY_START_S = 20  # backoff start when a boot sync failed
+WIFI_RETRY_MAX_S = 300  # backoff ceiling for the unsynced retry
 NTP_RESYNC_HOURS = 6
 CLOCK_24H = True
 

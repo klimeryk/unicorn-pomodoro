@@ -1,11 +1,33 @@
-# WiFi + NTP time. The Pico W has no battery-backed RTC, so we sync over
-# WiFi at boot (credentials in secrets.py).
-
 import time
 
 import config
 
 synced = False
+
+
+def _connect(wlan, network, ssid, password):
+    got_ip = getattr(network, "STAT_GOT_IP", 3)
+    hard_fail = (
+        getattr(network, "STAT_WRONG_PASSWORD", -3),
+        getattr(network, "STAT_NO_AP_FOUND", -2),
+        getattr(network, "STAT_CONNECT_FAIL", -1),
+    )
+    for attempt in range(config.WIFI_CONNECT_ATTEMPTS):
+        if attempt:
+            wlan.disconnect()
+            time.sleep_ms(500)
+        wlan.connect(ssid, password)
+        deadline = time.ticks_add(time.ticks_ms(), config.WIFI_TIMEOUT_S * 1000)
+        while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+            status = wlan.status()
+            if status == got_ip and wlan.ifconfig()[0] != "0.0.0.0":
+                return True
+            if status in hard_fail:
+                break
+            time.sleep_ms(100)
+        if wlan.isconnected() and wlan.ifconfig()[0] != "0.0.0.0":
+            return True
+    return False
 
 
 def sync():
@@ -19,13 +41,17 @@ def sync():
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    if not wlan.isconnected():
-        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-        deadline = time.ticks_add(time.ticks_ms(), config.WIFI_TIMEOUT_S * 1000)
-        while not wlan.isconnected() and time.ticks_diff(deadline, time.ticks_ms()) > 0:
-            time.sleep_ms(100)
-    if not wlan.isconnected():
+    try:  # noqa: SIM105 - contextlib.suppress isn't reliably on-device
+        wlan.config(pm=getattr(network.WLAN, "PM_NONE", 0xA11140))
+    except (OSError, ValueError):
+        pass
+    time.sleep_ms(500)
+    connected = wlan.isconnected() and wlan.ifconfig()[0] != "0.0.0.0"
+    if not connected and not _connect(wlan, network, WIFI_SSID, WIFI_PASSWORD):
         return False
+
+    ntptime.host = "pool.ntp.org"
+    ntptime.timeout = 5
     for _ in range(3):
         try:
             ntptime.settime()

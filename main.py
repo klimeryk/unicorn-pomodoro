@@ -70,6 +70,8 @@ ui.render_boot()
 su.update(graphics)
 net_time.sync()
 last_ntp_sync = time.ticks_ms()
+sync_retry_delay = config.WIFI_RETRY_START_S
+next_sync_retry = time.ticks_add(last_ntp_sync, sync_retry_delay * 1000)
 
 btn_a = Button(su, board.Unicorn.SWITCH_A)
 btn_b = Button(su, board.Unicorn.SWITCH_B)
@@ -146,6 +148,11 @@ while True:
     ):
         net_time.resync()
         last_ntp_sync = now
+    elif not net_time.synced and time.ticks_diff(now, next_sync_retry) >= 0:
+        net_time.sync()
+        last_ntp_sync = now
+        sync_retry_delay = min(sync_retry_delay * 2, config.WIFI_RETRY_MAX_S)
+        next_sync_retry = time.ticks_add(now, sync_retry_delay * 1000)
 
     if effect is not None and effect.done(now):
         effect = None
