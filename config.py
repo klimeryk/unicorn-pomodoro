@@ -62,7 +62,12 @@ CLOCK_HOURLY_FLASH = True
 CLOCK_BG_VALUE = 0.6  # HSV value of the flash background colors
 CLOCK_DIGIT_VALUE = 1.0  # HSV value of the settled digit color
 CLOCK_MINUTE_BRIGHTNESS = 0.7  # minutes vs hours; hours read as the bold line
-POMODORO_SECONDS_BRIGHTNESS = 0.5  # seconds vs minutes in the active timer; dimmer than clock minutes so ticking is less distracting
+# seconds vs minutes in the active timer; dimmer than clock minutes so ticking
+# is less distracting
+POMODORO_SECONDS_BRIGHTNESS = 0.5
+# Left-pad for single-digit timer minutes / clock hours. " " keeps the colon
+# centered without a leading zero (9:00, not 09:00). Must be a single char.
+TIME_PAD_CHAR = " "
 CLOCK_FLASH_S = 1.2  # random-color flash at the top of the hour
 CLOCK_SETTLE_S = 2.0  # smooth fade into the new hour's color
 CLOCK_INVERT_S = 1.0  # background fades out while the digits take the color

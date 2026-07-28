@@ -51,7 +51,7 @@ def test_clock_fonts_present():
         assert height == 8, (name, height)
         assert max_width == 6, (name, max_width)
         widths = data[2 : 2 + 105]
-        for ch in "0123456789-":
+        for ch in "0123456789- ":
             assert widths[ord(ch) - 32] > 0, f"{name}: no glyph for {ch!r}"
     print("clock fonts (Matrix 8x6) present: OK")
 

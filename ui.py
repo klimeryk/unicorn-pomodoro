@@ -18,6 +18,12 @@ STATE_COLORS = {
 }
 
 
+def _pad_time(n):
+    # str.rjust isn't in Pimoroni's MicroPython; values are always 1-2 digits.
+    s = str(n)
+    return config.TIME_PAD_CHAR + s if len(s) < 2 else s
+
+
 class UI:
     def __init__(
         self,
@@ -178,7 +184,7 @@ class UI:
         h = hms[0]
         if not config.CLOCK_24H:
             h = ((h + 11) % 12) + 1
-        return f"{h:02d}", f"{hms[1]:02d}"
+        return _pad_time(h), f"{hms[1]:02d}"
 
     def render_boot(self):
         self._set_font(self._font)
@@ -196,7 +202,7 @@ class UI:
             self._draw_a_hint(now)
         else:
             self._draw_time(
-                str(secs // 60),
+                _pad_time(secs // 60),
                 f"{secs % 60:02d}",
                 self.x_main,
                 self.y_main,
