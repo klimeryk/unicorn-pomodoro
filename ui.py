@@ -110,6 +110,8 @@ class UI:
         colon_on,
         scale,
         colon_brightness=1.0,
+        right_brightness=1.0,
+        colon_color=None,
     ):
         s = scale
         total = DIGIT_PITCH * s * (len(left) + len(right)) - s
@@ -121,11 +123,13 @@ class UI:
             self.g.text(ch, x, y, -1, s)
             x += DIGIT_PITCH * s
         colon_x = x - s
+        self.g.set_pen(self._pen(color, right_brightness))
         for ch in right:
             self.g.text(ch, x, y, -1, s)
             x += DIGIT_PITCH * s
         if colon_on:
-            self.g.set_pen(self._pen(color, colon_brightness))
+            pen_color = colon_color if colon_color is not None else color
+            self.g.set_pen(self._pen(pen_color, colon_brightness))
             self.g.rectangle(colon_x, y + s, s, s)
             self.g.rectangle(colon_x, y + 3 * s, s, s)
 
@@ -200,6 +204,8 @@ class UI:
                 secs % 2 == 0,
                 self.scale,
                 config.CLOCK_COLON_BRIGHTNESS,
+                config.POMODORO_SECONDS_BRIGHTNESS,
+                config.COLOR_CLOCK,
             )
             self._draw_bar(frac, color)
         self._draw_dots(completed, state == WORK, now)
