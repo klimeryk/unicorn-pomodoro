@@ -78,7 +78,7 @@ btn_b = Button(su, board.Unicorn.SWITCH_B)
 btn_c = Button(su, board.Unicorn.SWITCH_C)
 btn_d = Button(su, board.Unicorn.SWITCH_D)
 
-mode = MODE_POMODORO
+mode = MODE_CLOCK if config.BOOT_MODE == MODE_CLOCK else MODE_POMODORO
 reset_prompt_until = None
 effect = None
 last_ticked_second = None

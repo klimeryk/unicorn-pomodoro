@@ -57,6 +57,7 @@ WIFI_RETRY_START_S = 20  # backoff start when a boot sync failed
 WIFI_RETRY_MAX_S = 300  # backoff ceiling for the unsynced retry
 NTP_RESYNC_HOURS = 6
 CLOCK_24H = True
+BOOT_MODE = "clock"  # view shown at power-on: "clock" or "pomodoro"
 
 # Clock mode: colored digits on black, recolored each hour by a full-screen
 # flash that settles on the new color and then inverts back into the digits;
