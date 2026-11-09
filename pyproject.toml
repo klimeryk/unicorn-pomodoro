@@ -18,5 +18,5 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Test mocks implement the full graphics interface; unused args are by design.
+# Test fakes implement the full graphics interface; unused args are by design.
 "tests/*" = ["ARG"]

@@ -11,14 +11,18 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
 
 ## How it works
 
-- **Ready** (green border): the pixels next to the **A** button pulse.
-  Press **A** to start a 25-minute session.
-- **Session** (tomato border): `MM:SS` countdown, a quiet tick every second,
-  progress dots show your place in the cycle of 4.
-- **Break** (yellow border): 5 minutes after each session, 25 minutes after
-  the 4th — then everything starts over.
-- The current time is shown at the bottom of every screen (needs WiFi, see
-  below).
+- It boots into clock mode (`BOOT_MODE` in `config.py`); press **A** for the
+  Pomodoro.
+- **Ready** (green): the pixels next to the **A** button pulse. Press **A** to
+  start a 25-minute session.
+- **Session** (tomato): `MM:SS` countdown with a draining progress bar;
+  progress dots show your place in the cycle of 4. A tomato bursts when it
+  ends.
+- **Break** (yellow): 5 minutes after each session, 25 minutes after the 4th
+  — then everything starts over. Green rings converge when it ends, and the
+  timer waits in Ready for the next **A** press.
+- The current time is shown at the bottom of the Pomodoro screens (needs
+  WiFi, see below).
 - **B** asks `Reset?` — press **B** again to reset to the first session,
   any other button (or 5 s) cancels.
 - **D** switches to a clock-only mode and resets the Pomodoro; **A** goes
@@ -52,7 +56,7 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
    `pip install mpremote`; Thonny works too):
 
    ```sh
-   mpremote cp main.py config.py board.py pomodoro.py ui.py effects.py sound.py net_time.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont :
+   mpremote cp main.py config.py board.py compat.py pomodoro.py ui.py effects.py sound.py net_time.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont :
    mpremote reset
    ```
 
@@ -60,8 +64,9 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
 
 ## Configuration
 
-Everything lives in `config.py`: durations, colors, sounds (set
-`TICK_ENABLED`/`BEEP_ENABLED` to `False` to silence), brightness, timezone.
+Everything lives in `config.py`: durations, colors, sounds (`BEEP_ENABLED`
+for the end-of-phase melodies, `TICK_ENABLED` for an optional quiet tick every
+second of a session), brightness, timezone.
 Set `TEST_MODE = True` to shrink all phases to seconds and watch a full
 cycle end-to-end.
 
@@ -69,15 +74,16 @@ cycle end-to-end.
 
 Set `BOARD = "galactic"` or `BOARD = "cosmic"` in `config.py` and flash the
 matching firmware. All layout is derived from the board's dimensions plus
-the small per-board table (`_LAYOUT`) in `config.py` — border rings, text
+the small per-board table (`LAYOUTS`) in `config.py` — border rings, text
 scale and stacked vs side-by-side arrangement.
 
 ## Development
 
-The state machine (`pomodoro.py`) is hardware-free and tested on the host:
+The timer logic, UI rendering, animations, sync schedule and fonts are
+tested on the host (no hardware or dependencies needed):
 
 ```sh
-python3 tests/test_pomodoro.py
+python3 -m unittest
 ```
 
 Linting and formatting use [ruff](https://docs.astral.sh/ruff/)
@@ -90,15 +96,15 @@ ruff format .   # format
 
 The main display font is [Tom Thumb](https://opengameart.org/content/tom-thumb-tiny-ascii-font-3x5)
 by Brian Swetland and Robey Pointer (CC0/CC-BY 3.0), checked in as the
-`tom-thumb-new.png` sprite sheet. Clock mode uses trip5's
+`assets/tom-thumb-new.png` sprite sheet. Clock mode uses trip5's
 [Matrix-Fonts](https://github.com/trip5/Matrix-Fonts) (CC-BY): the bold
 `MatrixChunky8x6` for the hours and the thin `MatrixLight8x6` for the minutes.
-The `.bitmapfont` files are generated with
-[pgfutil](https://github.com/Gadgetoid/pgfutil):
+`3x5.bitmapfont` is generated with
+[pgfutil](https://github.com/Gadgetoid/pgfutil); the two Matrix fonts are
+checked in as-is:
 
 ```sh
 pip install pgfutil pillow
-python3 tools/build_font.py           # 3x5.bitmapfont
-python3 tools/build_matrix_fonts.py   # MatrixChunky8x6 + MatrixLight8x6 (auto-fetches the BDFs)
-python3 tests/test_font.py            # sanity-check the results
+python3 tools/build_font.py              # 3x5.bitmapfont
+python3 -m unittest tests.test_font      # sanity-check the result
 ```

@@ -1,5 +1,5 @@
 # Builds 3x5.bitmapfont (Pimoroni PicoGraphics custom font) from
-# tom-thumb-new.png, the Tom Thumb 3x5 font sheet (CC0/CC-BY 3.0,
+# assets/tom-thumb-new.png, the Tom Thumb 3x5 font sheet (CC0/CC-BY 3.0,
 # https://opengameart.org/content/tom-thumb-tiny-ascii-font-3x5): a 32x4 grid
 # of 4x6 cells covering chars 0-127, black ink, glyph in the left 3 columns,
 # descenders on the 6th row. Needs `pip install pgfutil pillow`.
@@ -20,7 +20,7 @@ FIRST_CHAR = 32
 LAST_CHAR = 126  # 127 is a solid placeholder block in the sheet
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SHEET = os.path.join(ROOT, "tom-thumb-new.png")
+SHEET = os.path.join(ROOT, "assets", "tom-thumb-new.png")
 OUT = os.path.join(ROOT, "3x5.bitmapfont")
 
 
@@ -42,6 +42,11 @@ def sheet_glyphs(sheet):
 
 def main():
     sheet = Image.open(SHEET).convert("L")
+    # Accept integer-upscaled copies of the sheet, like the 512x96 one checked in.
+    pixel_size = sheet.width // (SHEET_COLS * CELL_W)
+    sheet = sheet.resize(
+        (sheet.width // pixel_size, sheet.height // pixel_size), Image.NEAREST
+    )
     canvas = Image.new(
         "RGBA",
         (

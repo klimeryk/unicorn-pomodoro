@@ -49,7 +49,7 @@ BEEP_VOLUME = 0.4
 WORK_DONE_MELODY = ((1175, 120), (988, 120), (784, 250))  # descending: wind down
 BREAK_DONE_MELODY = ((784, 120), (988, 120), (1175, 250))  # ascending: back at it
 
-UTC_OFFSET_HOURS = 0  # CET; DST on top of this if AUTO_DST_EU
+UTC_OFFSET_HOURS = 0  # e.g. 1 for CET; DST on top of this if AUTO_DST_EU
 AUTO_DST_EU = False  # EU rule: last Sunday of March -> last Sunday of October
 WIFI_TIMEOUT_S = 10
 WIFI_CONNECT_ATTEMPTS = 3  # full connect retries per sync() call
@@ -83,11 +83,11 @@ PULSE_PERIOD_MS = 1200  # breathing rate of the "press A" hint
 PULSE_MIN_BRIGHTNESS = 0.25
 PULSE_MAX_BRIGHTNESS = 1.0
 
-_LAYOUT = {
+LAYOUTS = {
     "stellar": {"rings": 1, "scale": 1, "horizontal": False},
     "galactic": {"rings": 1, "scale": 1, "horizontal": True},
     "cosmic": {"rings": 3, "scale": 2, "horizontal": False},
 }
-LAYOUT = _LAYOUT[BOARD]
+LAYOUT = LAYOUTS[BOARD]
 
 RING_FADE = (1.0, 0.55, 0.25)

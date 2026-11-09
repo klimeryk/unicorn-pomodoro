@@ -1,17 +1,7 @@
-# Pomodoro state machine. No hardware imports so it also runs on host
-# CPython (see tests/test_pomodoro.py). All timestamps are ticks_ms values
-# supplied by the caller.
+# Hardware-free so it runs on host CPython too; every timestamp is a
+# ticks_ms value supplied by the caller.
 
-try:
-    from time import ticks_add, ticks_diff
-except ImportError:
-
-    def ticks_add(t, delta):
-        return t + delta
-
-    def ticks_diff(a, b):
-        return a - b
-
+from compat import ticks_add, ticks_diff
 
 READY = "ready"
 WORK = "work"
@@ -20,8 +10,6 @@ LONG_BREAK = "long_break"
 
 WORK_DONE = "work_done"
 BREAK_DONE = "break_done"
-
-BREAK_STATES = (SHORT_BREAK, LONG_BREAK)
 
 
 class Pomodoro:
@@ -33,8 +21,7 @@ class Pomodoro:
         }
         self.sessions_per_cycle = sessions_per_cycle
         self.state = READY
-        self.session = 1
-        self.completed = 0
+        self.completed_sessions = 0
         self._deadline = 0
 
     def start(self, now):
@@ -48,43 +35,34 @@ class Pomodoro:
 
     def reset(self):
         self.state = READY
-        self.session = 1
-        self.completed = 0
+        self.completed_sessions = 0
 
     def poll(self, now):
         if self.state == READY or ticks_diff(self._deadline, now) > 0:
             return None
         if self.state == WORK:
-            self.completed += 1
-            next_state = (
-                LONG_BREAK if self.session >= self.sessions_per_cycle else SHORT_BREAK
-            )
-            self.state = next_state
-            self._deadline = ticks_add(self._deadline, self._durations_ms[next_state])
+            self.completed_sessions += 1
+            if self.completed_sessions >= self.sessions_per_cycle:
+                self.state = LONG_BREAK
+            else:
+                self.state = SHORT_BREAK
+            self._deadline = ticks_add(self._deadline, self._durations_ms[self.state])
             return WORK_DONE
         if self.state == LONG_BREAK:
-            self.session = 1
-            self.completed = 0
-        else:
-            self.session += 1
+            self.completed_sessions = 0
         self.state = READY
         return BREAK_DONE
+
+    def _remaining_ms(self, now):
+        return max(0, ticks_diff(self._deadline, now))
 
     def remaining_seconds(self, now):
         if self.state == READY:
             return 0
-        ms = ticks_diff(self._deadline, now)
-        if ms < 0:
-            ms = 0
-        return (ms + 999) // 1000
+        return (self._remaining_ms(now) + 999) // 1000
 
     def remaining_fraction(self, now):
         if self.state == READY:
             return 0.0
-        total = self._durations_ms[self.state]
-        ms = ticks_diff(self._deadline, now)
-        if ms < 0:
-            ms = 0
-        elif ms > total:
-            ms = total
-        return ms / total
+        phase_ms = self._durations_ms[self.state]
+        return min(self._remaining_ms(now), phase_ms) / phase_ms

@@ -1,100 +1,106 @@
-# Host-side test of the transition animations (no hardware needed):
-#   python3 tests/test_effects.py
-
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import random
+import unittest
+from unittest import mock
 
 import config
-from effects import Burst, HourFlash, Rings
+from effects import BLACK, Burst, HourFlash, Rings
+from tests.fakes import FakeGraphics
 
-W = H = 16
-
-
-class MockGraphics:
-    def __init__(self):
-        self.pixels_drawn = 0
-
-    def create_pen(self, r, g, b):
-        assert 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255, (r, g, b)
-        return (r, g, b)
-
-    def set_pen(self, pen):
-        pass
-
-    def clear(self):
-        pass
-
-    def pixel(self, x, y):
-        assert 0 <= x < W and 0 <= y < H, (x, y)
-        self.pixels_drawn += 1
-
-    def rectangle(self, x, y, w, h):
-        assert x >= 0 and x + w <= W and y >= 0 and y + h <= H, (x, y, w, h)
-        self.pixels_drawn += w * h
+BOARD_SIZES = ((16, 16), (53, 11), (32, 32))
+FRAME_MS = 20
+START_MS = 1000
 
 
-def run_effect(make):
-    g = MockGraphics()
-    fx = make(g)
-    fx.start(1000)
-    assert not fx.done(1000)
-    now = 1000
-    frames = 0
-    while not fx.done(now):
-        fx.draw(now)
-        now += 20
-        frames += 1
-        assert frames < 1000, "effect never finished"
-    duration = (now - 1000) / 1000
-    assert 1.0 < duration < 5.0, duration
-    assert g.pixels_drawn > frames, g.pixels_drawn
-    print(f"{type(fx).__name__}: {frames} frames, {g.pixels_drawn} px: OK")
+def play_to_completion(effect):
+    effect.start(START_MS)
+    now = START_MS
+    while not effect.done(now):
+        effect.draw(now)
+        now += FRAME_MS
+        if now - START_MS > 10_000:
+            raise AssertionError("effect never finished")
+    return now - START_MS
 
 
-def test_burst():
-    run_effect(lambda g: Burst(g, W, H, (255, 60, 40), (30, 150, 40)))
+class TransitionEffectTest(unittest.TestCase):
+    def setUp(self):
+        random.seed(1)
+
+    def _assert_plays_on_every_board(self, make_effect):
+        for width, height in BOARD_SIZES:
+            with self.subTest(board=(width, height)):
+                graphics = FakeGraphics(width, height)
+                effect = make_effect(graphics, width, height)
+                self.assertFalse(effect.done(START_MS))
+                duration_ms = play_to_completion(effect)
+                self.assertGreaterEqual(duration_ms, effect.DURATION_S * 1000)
+                frames = duration_ms // FRAME_MS
+                self.assertGreater(graphics.pixels_drawn, frames)
+
+    def test_burst_plays_on_screen(self):
+        self._assert_plays_on_every_board(
+            lambda g, w, h: Burst(g, w, h, config.TOMATO_RED, config.STEM_GREEN)
+        )
+
+    def test_rings_play_on_screen(self):
+        self._assert_plays_on_every_board(
+            lambda g, w, h: Rings(g, w, h, config.COLOR_READY)
+        )
 
 
-def test_rings():
-    run_effect(lambda g: Rings(g, W, H, (0, 255, 0)))
-
-
-def test_hour_flash():
-    config.TEST_MODE = False
-    fx = HourFlash()
-    fg0, bg0 = fx.update(0, (9, 59, 58))
-    assert bg0 is None
-    assert fx.update(100, (9, 59, 59)) == (fg0, None)
-    assert fx.update(200, None) == (fg0, None)
-    assert max(fg0) > 0, fg0
-
-    total_ms = int(
+class HourFlashTest(unittest.TestCase):
+    TRANSITION_MS = int(
         (config.CLOCK_FLASH_S + config.CLOCK_SETTLE_S + config.CLOCK_INVERT_S) * 1000
     )
-    seen = set()
-    now = 300
-    end = now + total_ms
-    while now < end:
-        fg, bg = fx.update(now, (10, 0, 0))
-        assert bg is not None
-        for c in (fg, bg):
-            for ch in c:
-                assert isinstance(ch, int) and 0 <= ch <= 255, c
-        seen.add((fg, bg))
-        now += 20
-    assert len(seen) > 10, len(seen)
 
-    settled = fx.update(end + 100, (10, 0, 1))
-    assert settled == fx.update(end + 200, (10, 30, 0))
-    assert settled[1] is None
-    assert settled[0] != fg0
-    print(f"HourFlash: {len(seen)} states during transition: OK")
+    def setUp(self):
+        random.seed(1)
+        patcher = mock.patch.object(config, "TEST_MODE", False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.flash = HourFlash()
 
+    def _assert_valid_color(self, color):
+        self.assertEqual(len(color), 3)
+        for channel in color:
+            self.assertIsInstance(channel, int)
+            self.assertTrue(0 <= channel <= 255, color)
 
-if __name__ == "__main__":
-    test_burst()
-    test_rings()
-    test_hour_flash()
-    print("all effects tests passed")
+    def test_steady_within_an_hour(self):
+        digit_color, background = self.flash.update(0, (9, 59, 58))
+        self.assertEqual(background, BLACK)
+        self.assertGreater(max(digit_color), 0)
+        self.assertEqual(self.flash.update(100, (9, 59, 59)), (digit_color, BLACK))
+
+    def test_unknown_time_keeps_current_colors(self):
+        steady = self.flash.update(0, (9, 59, 58))
+        self.assertEqual(self.flash.update(100, None), steady)
+
+    def test_new_hour_flashes_then_settles_on_new_digit_color(self):
+        old_digit_color, _ = self.flash.update(0, (9, 59, 59))
+        start = 100
+        end = start + self.TRANSITION_MS
+        frames_seen = set()
+        for now in range(start, end, FRAME_MS):
+            digit_color, background = self.flash.update(now, (10, 0, 0))
+            self._assert_valid_color(digit_color)
+            self._assert_valid_color(background)
+            frames_seen.add((digit_color, background))
+        self.assertGreater(len(frames_seen), 10)
+        _, mid_transition_background = self.flash.update(
+            start + self.TRANSITION_MS // 2, (10, 0, 0)
+        )
+        self.assertNotEqual(mid_transition_background, BLACK)
+
+        settled = self.flash.update(end + 100, (10, 0, 1))
+        self.assertEqual(settled, self.flash.update(end + 200, (10, 30, 0)))
+        new_digit_color, background = settled
+        self.assertEqual(background, BLACK)
+        self.assertNotEqual(new_digit_color, old_digit_color)
+
+    def test_test_mode_flashes_every_minute(self):
+        with mock.patch.object(config, "TEST_MODE", True):
+            self.flash.update(0, (9, 0, 59))
+            self.flash.update(100, (9, 1, 0))
+            _, background = self.flash.update(100 + FRAME_MS * 10, (9, 1, 0))
+        self.assertNotEqual(background, BLACK)

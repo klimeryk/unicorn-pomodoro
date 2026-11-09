@@ -1,6 +1,6 @@
 from config import BOARD
 
-__all__ = ["BUTTON_A_ZONE", "DISPLAY", "HEIGHT", "WIDTH", "Channel", "Unicorn"]
+__all__ = ["BUTTON_A_HINT_PIXELS", "DISPLAY", "HEIGHT", "WIDTH", "Channel", "Unicorn"]
 
 if BOARD == "stellar":
     from picographics import DISPLAY_STELLAR_UNICORN as DISPLAY
@@ -15,9 +15,9 @@ elif BOARD == "cosmic":
     from cosmic import CosmicUnicorn as Unicorn
     from picographics import DISPLAY_COSMIC_UNICORN as DISPLAY
 else:
-    raise ValueError("Unknown BOARD in config.py: " + str(BOARD))
+    raise ValueError(f"Unknown BOARD in config.py: {BOARD}")
 
 WIDTH = Unicorn.WIDTH
 HEIGHT = Unicorn.HEIGHT
 
-BUTTON_A_ZONE = tuple((0, y) for y in range(2, 5))
+BUTTON_A_HINT_PIXELS = tuple((0, y) for y in range(2, 5))

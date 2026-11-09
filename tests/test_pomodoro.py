@@ -1,10 +1,4 @@
-# Host-side test of the Pomodoro state machine (no hardware needed):
-#   python3 tests/test_pomodoro.py
-
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import unittest
 
 from pomodoro import (
     BREAK_DONE,
@@ -16,105 +10,135 @@ from pomodoro import (
     Pomodoro,
 )
 
-WORK_S, SHORT_S, LONG_S, CYCLE = 25 * 60, 5 * 60, 25 * 60, 4
+WORK_S = 25 * 60
+SHORT_BREAK_S = 5 * 60
+LONG_BREAK_S = 15 * 60
+SESSIONS_PER_CYCLE = 4
+
+WORK_MS = WORK_S * 1000
+SHORT_BREAK_MS = SHORT_BREAK_S * 1000
+LONG_BREAK_MS = LONG_BREAK_S * 1000
+EFFECT_PAD_MS = 1800
 
 
-def test_full_cycle():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    t = 1000
-    assert p.state == READY and p.session == 1 and p.completed == 0
+class PomodoroTest(unittest.TestCase):
+    def setUp(self):
+        self.pomodoro = Pomodoro(
+            WORK_S, SHORT_BREAK_S, LONG_BREAK_S, SESSIONS_PER_CYCLE
+        )
 
-    for session in range(1, CYCLE + 1):
-        assert p.state == READY and p.session == session
-        p.start(t)
-        assert p.state == WORK
-        assert p.remaining_seconds(t) == WORK_S
-        assert p.poll(t + WORK_S * 1000 - 1) is None
+    def _run_session(self, start):
+        self.pomodoro.start(start)
+        work_end = start + WORK_MS
+        self.assertEqual(self.pomodoro.poll(work_end), WORK_DONE)
+        break_ms = (
+            LONG_BREAK_MS if self.pomodoro.state == LONG_BREAK else SHORT_BREAK_MS
+        )
+        break_end = work_end + break_ms
+        self.assertEqual(self.pomodoro.poll(break_end), BREAK_DONE)
+        return break_end
 
-        t += WORK_S * 1000
-        assert p.poll(t) == WORK_DONE
-        assert p.completed == session
-        expected_break = LONG_BREAK if session == CYCLE else SHORT_BREAK
-        assert p.state == expected_break, p.state
-        break_s = LONG_S if session == CYCLE else SHORT_S
-        assert p.remaining_seconds(t) == break_s
+    def test_starts_ready_with_no_completed_sessions(self):
+        self.assertEqual(self.pomodoro.state, READY)
+        self.assertEqual(self.pomodoro.completed_sessions, 0)
+        self.assertEqual(self.pomodoro.remaining_seconds(0), 0)
+        self.assertEqual(self.pomodoro.remaining_fraction(0), 0.0)
 
-        t += break_s * 1000
-        assert p.poll(t) == BREAK_DONE
-        assert p.state == READY
+    def test_poll_does_nothing_while_ready(self):
+        self.assertIsNone(self.pomodoro.poll(10 * WORK_MS))
+        self.assertEqual(self.pomodoro.state, READY)
 
-    assert p.session == 1 and p.completed == 0
-    print("full cycle: OK")
+    def test_work_runs_for_its_full_duration(self):
+        self.pomodoro.start(1000)
+        self.assertEqual(self.pomodoro.state, WORK)
+        self.assertEqual(self.pomodoro.remaining_seconds(1000), WORK_S)
+        self.assertIsNone(self.pomodoro.poll(1000 + WORK_MS - 1))
+        self.assertEqual(self.pomodoro.poll(1000 + WORK_MS), WORK_DONE)
 
+    def test_full_cycle_ends_with_long_break_then_starts_over(self):
+        now = 0
+        for session in range(1, SESSIONS_PER_CYCLE + 1):
+            self.pomodoro.start(now)
+            now += WORK_MS
+            self.assertEqual(self.pomodoro.poll(now), WORK_DONE)
+            self.assertEqual(self.pomodoro.completed_sessions, session)
+            if session < SESSIONS_PER_CYCLE:
+                self.assertEqual(self.pomodoro.state, SHORT_BREAK)
+                self.assertEqual(self.pomodoro.remaining_seconds(now), SHORT_BREAK_S)
+                now += SHORT_BREAK_MS
+            else:
+                self.assertEqual(self.pomodoro.state, LONG_BREAK)
+                self.assertEqual(self.pomodoro.remaining_seconds(now), LONG_BREAK_S)
+                now += LONG_BREAK_MS
+            self.assertEqual(self.pomodoro.poll(now), BREAK_DONE)
+            self.assertEqual(self.pomodoro.state, READY)
+        self.assertEqual(self.pomodoro.completed_sessions, 0)
 
-def test_ceil_countdown():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    p.start(0)
-    assert p.remaining_seconds(1) == WORK_S
-    assert p.remaining_seconds(1000) == WORK_S - 1
-    assert p.remaining_seconds(WORK_S * 1000 + 5000) == 0
-    print("ceil countdown: OK")
+    def test_break_waits_in_ready_for_next_start(self):
+        end = self._run_session(0)
+        self.assertIsNone(self.pomodoro.poll(end + WORK_MS))
+        self.assertEqual(self.pomodoro.state, READY)
+        self.assertEqual(self.pomodoro.completed_sessions, 1)
 
+    def test_countdown_rounds_up_to_whole_seconds(self):
+        self.pomodoro.start(0)
+        self.assertEqual(self.pomodoro.remaining_seconds(1), WORK_S)
+        self.assertEqual(self.pomodoro.remaining_seconds(1000), WORK_S - 1)
+        self.assertEqual(self.pomodoro.remaining_seconds(WORK_MS + 5000), 0)
 
-def test_reset_mid_work():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    for _ in range(2):
-        p.start(0)
-        p.poll(WORK_S * 1000)
-        p.poll((WORK_S + SHORT_S) * 1000)
-    assert p.session == 3 and p.completed == 2
-    p.start(0)
-    p.reset()
-    assert p.state == READY and p.session == 1 and p.completed == 0
-    assert p.remaining_seconds(1000) == 0
-    assert p.poll(WORK_S * 2000) is None
-    print("reset mid-work: OK")
+    def test_start_is_ignored_while_running(self):
+        self.pomodoro.start(0)
+        self.pomodoro.start(60_000)
+        self.assertEqual(self.pomodoro.poll(WORK_MS), WORK_DONE)
 
+    def test_reset_mid_session_returns_to_ready(self):
+        now = self._run_session(0)
+        now = self._run_session(now)
+        self.assertEqual(self.pomodoro.completed_sessions, 2)
+        self.pomodoro.start(now)
+        self.pomodoro.reset()
+        self.assertEqual(self.pomodoro.state, READY)
+        self.assertEqual(self.pomodoro.completed_sessions, 0)
+        self.assertEqual(self.pomodoro.remaining_seconds(now + 1000), 0)
+        self.assertIsNone(self.pomodoro.poll(now + 2 * WORK_MS))
 
-def test_remaining_fraction():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    assert p.remaining_fraction(0) == 0.0
-    p.start(0)
-    assert p.remaining_fraction(0) == 1.0
-    assert p.remaining_fraction(WORK_S * 500) == 0.5
-    assert p.remaining_fraction(WORK_S * 1000 + 5000) == 0.0
-    print("remaining fraction: OK")
+    def test_remaining_fraction_tracks_current_phase(self):
+        self.pomodoro.start(0)
+        self.assertEqual(self.pomodoro.remaining_fraction(0), 1.0)
+        self.assertEqual(self.pomodoro.remaining_fraction(WORK_MS // 2), 0.5)
+        self.pomodoro.poll(WORK_MS)
+        self.assertEqual(self.pomodoro.remaining_fraction(WORK_MS), 1.0)
+        halfway_through_break = WORK_MS + SHORT_BREAK_MS // 2
+        self.assertEqual(self.pomodoro.remaining_fraction(halfway_through_break), 0.5)
+        self.assertEqual(self.pomodoro.remaining_fraction(2 * WORK_MS), 0.0)
 
+    def test_next_phase_is_timed_from_deadline_not_poll_time(self):
+        self.pomodoro.start(0)
+        late_poll = WORK_MS + 900
+        self.assertEqual(self.pomodoro.poll(late_poll), WORK_DONE)
+        self.assertEqual(
+            self.pomodoro.remaining_seconds(WORK_MS + 1000), SHORT_BREAK_S - 1
+        )
 
-def test_no_drift_between_phases():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    p.start(0)
-    assert p.poll(WORK_S * 1000 + 900) == WORK_DONE
-    assert p.remaining_seconds(WORK_S * 1000 + 1000) == SHORT_S - 1
-    print("no drift between phases: OK")
+    def test_postpone_extends_current_phase(self):
+        self.pomodoro.start(0)
+        self.pomodoro.poll(WORK_MS)
+        self.pomodoro.postpone(EFFECT_PAD_MS)
+        break_end = WORK_MS + SHORT_BREAK_MS + EFFECT_PAD_MS
+        self.assertEqual(
+            self.pomodoro.remaining_seconds(WORK_MS + EFFECT_PAD_MS), SHORT_BREAK_S
+        )
+        self.assertIsNone(self.pomodoro.poll(break_end - 1))
+        self.assertEqual(self.pomodoro.poll(break_end), BREAK_DONE)
 
+    def test_postponed_phase_shows_full_progress_until_pad_elapses(self):
+        self.pomodoro.start(0)
+        self.pomodoro.poll(WORK_MS)
+        self.pomodoro.postpone(EFFECT_PAD_MS)
+        self.assertEqual(self.pomodoro.remaining_fraction(WORK_MS), 1.0)
 
-def test_postpone_shifts_deadline():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    p.start(0)
-    assert p.poll(WORK_S * 1000) == WORK_DONE
-    p.postpone(1800)
-    assert p.remaining_seconds(WORK_S * 1000 + 1800) == SHORT_S
-    assert p.poll((WORK_S + SHORT_S) * 1000 + 1799) is None
-    assert p.poll((WORK_S + SHORT_S) * 1000 + 1800) == BREAK_DONE
-    print("postpone shifts deadline: OK")
-
-
-def test_postpone_noop_when_ready():
-    p = Pomodoro(WORK_S, SHORT_S, LONG_S, CYCLE)
-    p.postpone(1800)
-    assert p._deadline == 0
-    p.start(0)
-    assert p.remaining_seconds(0) == WORK_S
-    print("postpone no-op when ready: OK")
-
-
-if __name__ == "__main__":
-    test_full_cycle()
-    test_ceil_countdown()
-    test_reset_mid_work()
-    test_remaining_fraction()
-    test_no_drift_between_phases()
-    test_postpone_shifts_deadline()
-    test_postpone_noop_when_ready()
-    print("all pomodoro tests passed")
+    def test_postpone_is_ignored_while_ready(self):
+        self.pomodoro.postpone(EFFECT_PAD_MS)
+        self.pomodoro.start(0)
+        self.assertEqual(self.pomodoro.remaining_seconds(0), WORK_S)
+        self.assertEqual(self.pomodoro.poll(WORK_MS), WORK_DONE)

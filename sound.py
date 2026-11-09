@@ -1,12 +1,11 @@
-from time import ticks_add, ticks_diff
-
 import config
+from compat import ticks_add, ticks_diff
 
 _NOTE_GAP_MS = 40
 
 
 class Sound:
-    def __init__(self, su, channel_cls):
+    def __init__(self, unicorn, channel_type):
         self.enabled = config.TICK_ENABLED or config.BEEP_ENABLED
         self._tick_off_at = None
         self._note_off_at = None
@@ -14,26 +13,26 @@ class Sound:
         self._queue = []
         if not self.enabled:
             return
-        self._tick_ch = su.synth_channel(0)
+        self._tick_ch = unicorn.synth_channel(0)
         self._tick_ch.configure(
-            waveforms=channel_cls.TRIANGLE,
+            waveforms=channel_type.TRIANGLE,
             attack=0.002,
             decay=0.02,
             sustain=0.0,
             release=0.02,
             volume=config.TICK_VOLUME,
         )
-        self._beep_ch = su.synth_channel(1)
+        self._beep_ch = unicorn.synth_channel(1)
         self._beep_ch.configure(
-            waveforms=channel_cls.SINE,
+            waveforms=channel_type.SINE,
             attack=0.005,
             decay=0.05,
             sustain=0.6,
             release=0.05,
             volume=config.BEEP_VOLUME,
         )
-        su.set_volume(config.DEFAULT_VOLUME)
-        su.play_synth()
+        unicorn.set_volume(config.DEFAULT_VOLUME)
+        unicorn.play_synth()
 
     def tick(self, now):
         if not config.TICK_ENABLED:
