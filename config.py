@@ -68,7 +68,7 @@ CLOCK_DIGIT_VALUE = 1.0  # HSV value of the settled digit color
 CLOCK_MINUTE_BRIGHTNESS = 0.7  # minutes vs hours; hours read as the bold line
 # seconds vs minutes in the active timer; dimmer than clock minutes so ticking
 # is less distracting
-POMODORO_SECONDS_BRIGHTNESS = 0.5
+POMODORO_SECONDS_BRIGHTNESS = 0.7
 # Left-pad for single-digit timer minutes / clock hours. " " keeps the colon
 # centered without a leading zero (9:00, not 09:00). Must be a single char.
 TIME_PAD_CHAR = " "
