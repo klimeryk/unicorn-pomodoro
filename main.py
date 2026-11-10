@@ -25,6 +25,7 @@ MODE_CLOCK = "clock"
 
 LEVEL_STEP = 0.01
 GC_INTERVAL_MS = 1000
+DEBOUNCE_MS = 30
 FRAME_MS = 1000 // config.FPS
 
 
@@ -38,12 +39,19 @@ class Button:
         self._unicorn = unicorn
         self._switch = switch
         self._was_down = False
+        self._changed_at = 0
 
-    def just_pressed(self):
+    def just_pressed(self, now):
         down = self._unicorn.is_pressed(self._switch)
-        pressed = down and not self._was_down
+        if down == self._was_down:
+            return False
+        # Negative diffs mean the last change was so long ago that ticks
+        # wrapped; only a recent change counts as contact bounce.
+        if 0 <= time.ticks_diff(now, self._changed_at) < DEBOUNCE_MS:
+            return False
         self._was_down = down
-        return pressed
+        self._changed_at = now
+        return down
 
 
 class App:
@@ -94,9 +102,12 @@ class App:
     def run(self):
         self.ui.render_boot()
         self.unicorn.update(self.graphics)
-        self.network_time.sync(time.ticks_ms())
+        # The first poll powers up the WiFi chip; let that happen behind
+        # the boot screen.
+        self.network_time.poll(time.ticks_ms())
         gc.collect()
         self.last_gc = time.ticks_ms()
+        next_frame = time.ticks_ms()
         while True:
             now = time.ticks_ms()
             self._collect_garbage(now)
@@ -112,13 +123,26 @@ class App:
                 self.unicorn.adjust_volume,
             )
             self._advance_timer(now)
-            if self.mode == MODE_CLOCK or self.pomodoro.state == READY:
-                self.network_time.sync_if_due(now)
             if self.effect is not None and self.effect.done(now):
                 self.effect = None
+            if self._idle():
+                self.network_time.poll(now)
             self._render(now)
-            if self.effect is None:
-                time.sleep_ms(FRAME_MS)
+            next_frame = time.ticks_add(next_frame, FRAME_MS)
+            delay_ms = time.ticks_diff(next_frame, time.ticks_ms())
+            if delay_ms > 0:
+                time.sleep_ms(delay_ms)
+            else:
+                next_frame = time.ticks_ms()
+
+    def _idle(self):
+        # The synth plays from an IRQ, so a note sounding during a blocking
+        # NTP attempt would hang until the loop resumes.
+        return (
+            (self.mode == MODE_CLOCK or self.pomodoro.state == READY)
+            and self.effect is None
+            and not self.sound.busy()
+        )
 
     def _collect_garbage(self, now):
         if time.ticks_diff(now, self.last_gc) >= GC_INTERVAL_MS:
@@ -130,10 +154,10 @@ class App:
         self.effect = None
 
     def _handle_buttons(self, now):
-        a = self.button_a.just_pressed()
-        b = self.button_b.just_pressed()
-        c = self.button_c.just_pressed()
-        d = self.button_d.just_pressed()
+        a = self.button_a.just_pressed(now)
+        b = self.button_b.just_pressed(now)
+        c = self.button_c.just_pressed(now)
+        d = self.button_d.just_pressed(now)
         if self.reset_prompt_deadline is not None:
             if b:
                 self._reset_session()

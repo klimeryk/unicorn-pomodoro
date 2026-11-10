@@ -4,12 +4,16 @@
 try:
     from time import ticks_add, ticks_diff
 except ImportError:
+    # Same wraparound as MicroPython's ticks_ms (period 2**30) so host tests
+    # exercise it.
+    _TICKS_PERIOD = 1 << 30
+    _TICKS_HALF = _TICKS_PERIOD // 2
 
     def ticks_add(ticks, delta):
-        return ticks + delta
+        return (ticks + delta) % _TICKS_PERIOD
 
     def ticks_diff(end, start):
-        return end - start
+        return (end - start + _TICKS_HALF) % _TICKS_PERIOD - _TICKS_HALF
 
 
 try:

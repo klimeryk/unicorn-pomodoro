@@ -50,7 +50,8 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
    ```
 
    Set your timezone in `config.py` (`UTC_OFFSET_HOURS`; EU daylight saving
-   is applied automatically while `AUTO_DST_EU = True`).
+   is applied automatically while `AUTO_DST_EU = True`). If your router uses
+   WiFi channel 12 or 13, also set `WIFI_COUNTRY` (e.g. `"PL"`).
 
 3. **Copy the app to the board** (with [mpremote](https://docs.micropython.org/en/latest/reference/mpremote.html),
    `pip install mpremote`; Thonny works too):

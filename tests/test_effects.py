@@ -3,6 +3,7 @@ import unittest
 from unittest import mock
 
 import config
+from compat import ticks_add, ticks_diff
 from effects import BLACK, Burst, HourFlash, Rings
 from tests.fakes import FakeGraphics
 
@@ -11,15 +12,15 @@ FRAME_MS = 20
 START_MS = 1000
 
 
-def play_to_completion(effect):
-    effect.start(START_MS)
-    now = START_MS
+def play_to_completion(effect, start=START_MS):
+    effect.start(start)
+    now = start
     while not effect.done(now):
         effect.draw(now)
-        now += FRAME_MS
-        if now - START_MS > 10_000:
+        now = ticks_add(now, FRAME_MS)
+        if ticks_diff(now, start) > 10_000:
             raise AssertionError("effect never finished")
-    return now - START_MS
+    return ticks_diff(now, start)
 
 
 class TransitionEffectTest(unittest.TestCase):
@@ -41,6 +42,17 @@ class TransitionEffectTest(unittest.TestCase):
         self._assert_plays_on_every_board(
             lambda g, w, h: Burst(g, w, h, config.TOMATO_RED, config.STEM_GREEN)
         )
+
+    def test_effects_finish_on_time_across_ticks_wraparound(self):
+        start = (1 << 30) - 500
+        for effect in (
+            Burst(FakeGraphics(16, 16), 16, 16, config.TOMATO_RED, config.STEM_GREEN),
+            Rings(FakeGraphics(16, 16), 16, 16, config.COLOR_READY),
+        ):
+            with self.subTest(effect=type(effect).__name__):
+                duration_ms = play_to_completion(effect, start)
+                self.assertGreaterEqual(duration_ms, effect.DURATION_S * 1000)
+                self.assertLess(duration_ms, effect.DURATION_S * 1000 + FRAME_MS)
 
     def test_rings_play_on_screen(self):
         self._assert_plays_on_every_board(

@@ -34,6 +34,15 @@ class Sound:
         unicorn.set_volume(config.DEFAULT_VOLUME)
         unicorn.play_synth()
 
+    def busy(self):
+        # The synth runs from an audio IRQ: a note only stops when update()
+        # releases it, so the main loop must not block while this is True.
+        return (
+            self._tick_off_at is not None
+            or self._note_off_at is not None
+            or self._next_note_at is not None
+        )
+
     def tick(self, now):
         if not config.TICK_ENABLED:
             return
@@ -42,7 +51,7 @@ class Sound:
         self._tick_off_at = ticks_add(now, config.TICK_MS)
 
     def play(self, melody, now):
-        if not config.BEEP_ENABLED:
+        if not config.BEEP_ENABLED or not melody:
             return
         self._queue = list(melody)
         self._note_off_at = None

@@ -106,7 +106,10 @@ class UI:
     def _pulse(self, now):
         low = config.PULSE_MIN_BRIGHTNESS
         half_range = (config.PULSE_MAX_BRIGHTNESS - low) / 2
-        phase = now * 2 * math.pi / config.PULSE_PERIOD_MS
+        # Reduce in ints first: rp2 floats are single precision, and raw
+        # ticks (up to 2**30) would make the phase step visibly.
+        period = config.PULSE_PERIOD_MS
+        phase = (now % period) * 2 * math.pi / period
         return low + half_range * (math.sin(phase) + 1)
 
     def _draw_digits(self, text, x, y, step, scale):

@@ -1,5 +1,6 @@
 import unittest
 
+from compat import ticks_add
 from pomodoro import (
     BREAK_DONE,
     LONG_BREAK,
@@ -142,3 +143,16 @@ class PomodoroTest(unittest.TestCase):
         self.pomodoro.start(0)
         self.assertEqual(self.pomodoro.remaining_seconds(0), WORK_S)
         self.assertEqual(self.pomodoro.poll(WORK_MS), WORK_DONE)
+
+    def test_phases_run_across_ticks_wraparound(self):
+        start = (1 << 30) - WORK_MS // 2
+        self.pomodoro.start(start)
+        work_end = ticks_add(start, WORK_MS)
+        self.assertLess(work_end, start)
+        self.assertEqual(self.pomodoro.remaining_seconds(start), WORK_S)
+        self.assertIsNone(self.pomodoro.poll(ticks_add(work_end, -1)))
+        self.assertEqual(self.pomodoro.poll(work_end), WORK_DONE)
+        break_end = ticks_add(work_end, SHORT_BREAK_MS)
+        self.assertEqual(self.pomodoro.remaining_seconds(work_end), SHORT_BREAK_S)
+        self.assertIsNone(self.pomodoro.poll(ticks_add(break_end, -1)))
+        self.assertEqual(self.pomodoro.poll(break_end), BREAK_DONE)
