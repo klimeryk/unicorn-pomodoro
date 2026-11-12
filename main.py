@@ -15,6 +15,7 @@ from picographics import PicoGraphics
 import board
 import config
 import effects
+import settings
 from net_time import NetworkTime
 from pomodoro import BREAK_DONE, READY, WORK, WORK_DONE, Pomodoro
 from sound import Sound
@@ -58,7 +59,8 @@ class App:
     def __init__(self):
         self.unicorn = board.Unicorn()
         self.graphics = PicoGraphics(display=board.DISPLAY)
-        self.unicorn.set_brightness(config.DEFAULT_BRIGHTNESS)
+        brightness, volume = settings.load(config.SETTINGS_FILE)
+        self.unicorn.set_brightness(brightness)
         self.ui = UI(
             self.graphics,
             board.WIDTH,
@@ -68,7 +70,14 @@ class App:
             read_file("MatrixChunky8x6.bitmapfont"),
             read_file("MatrixLight8x6.bitmapfont"),
         )
-        self.sound = Sound(self.unicorn, board.Channel)
+        self.sound = Sound(self.unicorn, board.Channel, volume)
+        # Seeded from the firmware's readback so its float rounding doesn't
+        # look like a change and rewrite the file on every boot.
+        self.settings = settings.Settings(
+            config.SETTINGS_FILE,
+            self.unicorn.get_brightness(),
+            self.unicorn.get_volume(),
+        )
         self.burst = effects.Burst(
             self.graphics,
             board.WIDTH,
@@ -122,6 +131,11 @@ class App:
                 board.Unicorn.SWITCH_VOLUME_DOWN,
                 self.unicorn.adjust_volume,
             )
+            # A flash write stalls the loop, which would hold a sounding note.
+            if not self.sound.busy():
+                self.settings.poll(
+                    now, self.unicorn.get_brightness(), self.unicorn.get_volume()
+                )
             self._advance_timer(now)
             if self.effect is not None and self.effect.done(now):
                 self.effect = None

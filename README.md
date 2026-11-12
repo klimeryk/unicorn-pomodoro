@@ -31,7 +31,8 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
   random colors, settles on a new one, then fades back to black leaving the
   digits in the new color (set `CLOCK_HOURLY_FLASH = False` in `config.py`
   for a plain white-on-black clock).
-- **LUX +/-** adjusts brightness, **VOL +/-** adjusts the sound volume.
+- **LUX +/-** adjusts brightness, **VOL +/-** adjusts the sound volume. Both
+  are saved on the board (`settings.json`) and restored at power-on.
 
 ## Setup
 
@@ -57,7 +58,7 @@ the Galactic Unicorn (53x11) or Cosmic Unicorn (32x32) instead.
    `pip install mpremote`; Thonny works too):
 
    ```sh
-   mpremote cp main.py config.py board.py compat.py pomodoro.py ui.py effects.py sound.py net_time.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont :
+   mpremote cp main.py config.py board.py compat.py pomodoro.py ui.py effects.py sound.py net_time.py settings.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont :
    mpremote reset
    ```
 

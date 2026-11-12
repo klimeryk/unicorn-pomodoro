@@ -5,7 +5,7 @@ _NOTE_GAP_MS = 40
 
 
 class Sound:
-    def __init__(self, unicorn, channel_type):
+    def __init__(self, unicorn, channel_type, volume=config.DEFAULT_VOLUME):
         self.enabled = config.TICK_ENABLED or config.BEEP_ENABLED
         self._tick_off_at = None
         self._note_off_at = None
@@ -31,7 +31,7 @@ class Sound:
             release=0.05,
             volume=config.BEEP_VOLUME,
         )
-        unicorn.set_volume(config.DEFAULT_VOLUME)
+        unicorn.set_volume(volume)
         unicorn.play_synth()
 
     def busy(self):

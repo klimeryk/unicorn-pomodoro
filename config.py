@@ -40,7 +40,7 @@ STEM_GREEN = (30, 150, 40)
 
 TICK_ENABLED = False  # quiet tick every second during a work session
 BEEP_ENABLED = True  # beeps when a session/break ends
-DEFAULT_VOLUME = 0.5  # 0.0-1.0, also adjustable with the volume buttons
+DEFAULT_VOLUME = 0.5  # 0.0-1.0; first-boot level, VOL +/- changes are saved
 
 TICK_FREQ = 2093  # Hz
 TICK_MS = 25
@@ -79,7 +79,10 @@ CLOCK_FLASH_S = 1.2  # random-color flash at the top of the hour
 CLOCK_SETTLE_S = 2.0  # smooth fade into the new hour's color
 CLOCK_INVERT_S = 1.0  # background fades out while the digits take the color
 
-DEFAULT_BRIGHTNESS = 0.5
+DEFAULT_BRIGHTNESS = 0.5  # 0.0-1.0; first-boot level, LUX +/- changes are saved
+# Brightness/volume set with the buttons, restored at boot. Delete it on the
+# board to fall back to DEFAULT_BRIGHTNESS / DEFAULT_VOLUME.
+SETTINGS_FILE = "settings.json"
 FPS = 100
 SCROLL_MS = 150  # ms per pixel when scrolling text that does not fit
 PULSE_PERIOD_MS = 1200  # breathing rate of the "press A" hint

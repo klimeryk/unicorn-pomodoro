@@ -11,11 +11,11 @@ A MicroPython Pomodoro timer for the Pimoroni Stellar Unicorn: a 16x16 LED matri
 ```sh
 # Host tests — stdlib unittest, no dependencies; run from the repo root
 python3 -m unittest              # everything
-python3 -m unittest tests.test_ui # one module (also test_pomodoro, test_effects, test_sound, test_net_time, test_font)
+python3 -m unittest tests.test_ui # one module (also test_pomodoro, test_effects, test_sound, test_net_time, test_settings, test_font)
 ruff check .                     # lint — must stay clean; config in pyproject.toml
 ruff format .                    # format
 python3 tools/build_font.py      # regenerate 3x5.bitmapfont (needs: pip install pgfutil pillow)
-mpremote cp main.py config.py board.py compat.py pomodoro.py ui.py effects.py sound.py net_time.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont : && mpremote reset
+mpremote cp main.py config.py board.py compat.py pomodoro.py ui.py effects.py sound.py net_time.py settings.py secrets.py 3x5.bitmapfont MatrixChunky8x6.bitmapfont MatrixLight8x6.bitmapfont : && mpremote reset
 ```
 
 The Matrix 8x6 clock fonts (`MatrixChunky8x6.bitmapfont`, `MatrixLight8x6.bitmapfont`) are checked in; the repo currently ships **no** generator for them (only `tools/build_font.py`, for the 3x5 font).
@@ -26,7 +26,7 @@ Set `TEST_MODE = True` in `config.py` to shrink all phases to seconds for on-dev
 
 The core split is host-runnable vs device-only:
 
-- **Host-runnable**: `pomodoro.py` (pure state machine — timestamps are injected `now` arguments), `ui.py` and `effects.py` (need only a graphics object), `sound.py` (needs only a unicorn/channel stand-in), and `net_time.py`'s sync state machine and EU DST rule (the hardware calls `_open_wifi`/`_ntp_settime` are patched out in tests). `compat.py` supplies CPython stand-ins for `ticks_add`/`ticks_diff` — wrapping at 2**30 exactly like MicroPython's `ticks_ms`, so tests can cover wraparound — and `micropython.native`. Test and iterate on these without hardware.
+- **Host-runnable**: `pomodoro.py` (pure state machine — timestamps are injected `now` arguments), `ui.py` and `effects.py` (need only a graphics object), `sound.py` (needs only a unicorn/channel stand-in), `settings.py` (persisted brightness/volume; tests point it at a temp file), and `net_time.py`'s sync state machine and EU DST rule (the hardware calls `_open_wifi`/`_ntp_settime` are patched out in tests). `compat.py` supplies CPython stand-ins for `ticks_add`/`ticks_diff` — wrapping at 2**30 exactly like MicroPython's `ticks_ms`, so tests can cover wraparound — and `micropython.native`. Test and iterate on these without hardware.
 - **Device-only**: `main.py`, `board.py` and `net_time._Wifi`/`_ntp_settime` need MicroPython/firmware modules. Verify with `python3 -m py_compile` on the host; they can only run on the board.
 
 Responsibilities:
@@ -35,6 +35,7 @@ Responsibilities:
 - `config.py` holds every tunable (durations, colors, sound, timezone) plus the per-board `LAYOUTS` table (`LAYOUT` is the selected board's entry). `ui.py` derives all coordinates from `WIDTH`/`HEIGHT` + `LAYOUT` — no magic numbers anywhere else.
 - `pomodoro.py` knows nothing about buttons or rendering; it reports transitions as return values from `poll()` (`WORK_DONE`/`BREAK_DONE`) that `main.py` turns into beeps and a ~2s full-screen animation from `effects.py` (red tomato bursts when work ends, green rings converge when the break ends). Effects and the UI call `create_pen` directly with continuous float-scaled values (no quantization, no cache — pens are packed small ints, so this doesn't allocate); that is what keeps them smooth.
 - `main.py`'s `App` owns the view modes (pomodoro/clock), the "Reset?" confirm overlay, debounced button edge detection (`Button`), and the per-frame order: buttons → timer/sound → time sync (only when `_idle()`) → render. Frames are paced against a `FRAME_MS` deadline, so render time doesn't lower the FPS and per-frame steps (brightness/volume) run at a constant rate.
+- Brightness/volume persist in `settings.json` on the board (`config.SETTINGS_FILE`, created on first change — never copied with `mpremote`). `settings.load()` falls back to `DEFAULT_BRIGHTNESS`/`DEFAULT_VOLUME` per key on a missing or corrupt file; `Settings.poll()` writes only once the levels have been stable for `SAVE_DELAY_MS`, so a held LUX/VOL button costs one flash write. `main.py` skips the poll while `Sound.busy()`, since a flash write stalls the loop.
 - Time: the RTC holds UTC after NTP sync; `NetworkTime.local_hms()` applies the UTC offset + EU DST and returns `None` when unsynced — every caller must handle `None` (clock hidden / `--:--`). `NetworkTime.poll(now)` is a per-frame state machine: `wlan.connect()` is asynchronous on rp2, so connecting never blocks; only the NTP request blocks (≤ `_NTP_TIMEOUT_S`, one attempt per poll). It retries an unsynced clock with exponential backoff (`WIFI_RETRY_START_S` → `WIFI_RETRY_MAX_S`), counted from the end of the failed attempt, and resyncs every `NTP_RESYNC_HOURS` once synced.
 
 ## Hardware constraints
